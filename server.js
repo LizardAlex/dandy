@@ -71,9 +71,16 @@ wss.on('connection', (ws) => {
           totalBytesSent += size;
         }
       }
-    } else {
+    } else if (!isBinary) {
       room.forEach((peer) => {
         if (peer && peer.readyState === WebSocket.OPEN) {
+          peer.send(data, { binary: isBinary });
+          totalBytesSent += size;
+        }
+      });
+    } else {
+      room.forEach((peer, id) => {
+        if (peer && peer.readyState === WebSocket.OPEN && id !== 0) {
           peer.send(data, { binary: isBinary });
           totalBytesSent += size;
         }
