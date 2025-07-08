@@ -381,30 +381,29 @@ function createNes() {
   var firstFrame = true;
 
   nes.ui.writeAudio = function (samples) {
-    if (player === 1) {
-      ensureAudioContext();
-      audioBufferQueue.push(samples.slice());
-      if (audioBufferQueue.length === 1) {
-        playNextBuffer();
-      }
-      // Отправляем аудио зрителям с префиксом 'AUD0', пониженной частотой и в моно
-      if (ws.readyState === WebSocket.OPEN) {
-        const originalSampleRate = 44100;
-        const targetSampleRate = 22050;
-        const int16 = new Int16Array(samples.length);
-        for (let i = 0; i < samples.length; ++i) {
-          int16[i] = Math.max(-32768, Math.min(32767, samples[i]));
-        }
-        // Применяем low-pass фильтр перед downsampleAndMono
-        const filtered = lowPassFilter(int16, 7);
-        const downsampledMono = downsampleAndMono(filtered, originalSampleRate, targetSampleRate);
-        // Префикс 'AUD0'
-        const prefix = new Uint8Array([65, 85, 68, 48]); // 'A','U','D','0'
-        const audioBuf = new Uint8Array(prefix.length + downsampledMono.byteLength);
-        audioBuf.set(prefix, 0);
-        audioBuf.set(new Uint8Array(downsampledMono.buffer), prefix.length);
-        ws.send(audioBuf.buffer);
-      }
+    // Всегда применяем фильтр и downsample для локального воспроизведения
+    const originalSampleRate = 44100;
+    const targetSampleRate = 22050;
+    const int16 = new Int16Array(samples.length);
+    for (let i = 0; i < samples.length; ++i) {
+      int16[i] = Math.max(-32768, Math.min(32767, samples[i]));
+    }
+    const filtered = lowPassFilter(int16, 7);
+    const downsampledMono = downsampleAndMono(filtered, originalSampleRate, targetSampleRate);
+
+    ensureAudioContext();
+    audioBufferQueue.push(downsampledMono.slice());
+    if (audioBufferQueue.length === 1) {
+      playNextBuffer();
+    }
+
+    // Отправляем аудио зрителям
+    if (player === 1 && ws.readyState === WebSocket.OPEN) {
+      const prefix = new Uint8Array([65, 85, 68, 48]); // 'A','U','D','0'
+      const audioBuf = new Uint8Array(prefix.length + downsampledMono.byteLength);
+      audioBuf.set(prefix, 0);
+      audioBuf.set(new Uint8Array(downsampledMono.buffer), prefix.length);
+      ws.send(audioBuf.buffer);
     }
   };
 
