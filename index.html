@@ -4,35 +4,239 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <title>melody-jsnes</title>
   <style>
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      min-width: 100vw;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+    }
+    body {
+      width: 100vw;
+      height: 100vh;
+    }
+    #content {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    .canvas-container {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      z-index: 1;
+      overflow: hidden;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    #emulator {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+    }
     canvas {
-      width: 768px;
-      height: 720px;
+      display: block;
+      margin: 0;
+      padding: 0;
+      background: #000;
       image-rendering: -moz-crisp-edges;
       image-rendering: -webkit-crisp-edges;
       image-rendering: pixelated;
+      box-shadow: 0 0 32px #000a;
+      width: 100vw;
+      height: auto;
+      max-width: calc(100vh * (256 / 240));
+      max-height: 100vh;
     }
-
-    * {
+    #fullscreen-btn {
+      position: absolute;
+      top: 2vw;
+      right: 2vw;
+      z-index: 10;
+      padding: 14px 24px;
+      font-size: 28px;
+      border-radius: 12px;
+      border: none;
+      background: #222;
+      color: #fff;
+      opacity: 0.9;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    #virtual-gamepad {
+      display: none;
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      width: 100vw;
+      height: 45vh;
+      z-index: 20;
+      pointer-events: none;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: calc(2vh + env(safe-area-inset-bottom, 0));
+      min-height: 120px;
+    }
+    @media (max-width: 900px), (pointer: coarse) {
+      #virtual-gamepad {
+        display: flex;
+        pointer-events: auto;
+      }
+    }
+    .joystick-area {
+      width: 38vw;
+      height: 38vw;
+      max-width: 220px;
+      max-height: 220px;
+      min-width: 120px;
+      min-height: 120px;
+      background: #222c;
+      border-radius: 50%;
+      margin-left: 4vw;
+      margin-bottom: 2vh;
+      position: relative;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 12px #000a;
+    }
+    .joystick-dot {
+      width: 44px;
+      height: 44px;
+      background: #888;
+      border-radius: 50%;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: 0.7;
+    }
+    .abpad {
+      width: auto;
+      flex-direction: row;
+      align-items: flex-end;
+      gap: 44px;
+      margin-bottom: 2vh;
+      display: flex;
+      position: fixed;
+      right: 4vw;
+      bottom: 4vw;
+      z-index: 30;
+    }
+    .abpad-col {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+      align-items: center;
+    }
+    .gamepad-btn {
+      width: 80px;
+      height: 80px;
+      margin: 8px;
+      border-radius: 50%;
+      background: #c33;
+      color: #fff;
+      font-size: 32px;
+      border: none;
+      opacity: 0.92;
+      box-shadow: 0 2px 8px #000a;
+      pointer-events: auto;
+      touch-action: none;
+      font-weight: bold;
+      transition: background 0.1s, transform 0.1s;
+    }
+    .gamepad-btn.a, .gamepad-btn.b {
+      width: 100px;
+      height: 100px;
+      font-size: 38px;
+    }
+    .gamepad-btn.b {
+      background: #36c;
+    }
+    .gamepad-btn.start, .gamepad-btn.select {
+      width: 90px;
+      height: 48px;
+      border-radius: 12px;
+      font-size: 22px;
+      background: #444;
+    }
+    #status-overlay {
+      position: absolute;
+      left: 0; top: 0;
+      min-width: 0;
+      min-height: 0;
+      width: auto;
+      height: auto;
+      max-width: 80vw;
+      max-height: 40vh;
+      display: block;
+      pointer-events: none;
+      z-index: 9999;
+      font-size: 2.2vw;
+      color: #fff;
+      text-shadow: 0 2px 8px #000, 0 0 16px #000a;
+      font-family: sans-serif;
+      font-weight: bold;
+      letter-spacing: 1px;
+      text-align: left;
+      padding: 2vw 3vw 2vw 2vw;
       margin: 0;
-      padding: 0;
+      background: rgba(0,0,0,0.35);
+      border-radius: 0 0 12px 0;
+      transition: opacity 0.2s;
     }
-
-    #content {
-      margin: 0 auto;
-      width: 768px;
-      text-align: center;
+    /* --- Portrait: кнопки больше и прибиты к правому нижнему краю --- */
+    @media (orientation: portrait) and (max-width: 900px), (orientation: portrait) and (pointer: coarse) {
+      .abpad {
+        right: 4vw;
+        bottom: 8vw;
+      }
+      .gamepad-btn.a, .gamepad-btn.b {
+        width: 140px;
+        height: 140px;
+        font-size: 54px;
+      }
+      .gamepad-btn.start, .gamepad-btn.select {
+        width: 120px;
+        height: 60px;
+        font-size: 28px;
+      }
+      .joystick-area {
+        width: 60vw;
+        height: 60vw;
+        max-width: 320px;
+        max-height: 320px;
+      }
     }
-
-    #message {
-      font-family: sans-serif;
-      padding: 30px;
-      font-weight: 500;
-    }
-
-    #keys {
-      font-size: 14px;
-      font-family: sans-serif;
-      padding-bottom: 15px;
+    /* --- Landscape: кнопки чуть меньше, но тоже прибиты вправо --- */
+    @media (orientation: landscape) and (max-width: 900px), (orientation: landscape) and (pointer: coarse) {
+      .abpad {
+        right: 4vw;
+        bottom: 4vw;
+      }
+      .gamepad-btn.a, .gamepad-btn.b {
+        width: 80px;
+        height: 80px;
+        font-size: 32px;
+      }
+      .gamepad-btn.start, .gamepad-btn.select {
+        width: 60px;
+        height: 36px;
+        font-size: 16px;
+      }
     }
   </style>
   <script src="https://unpkg.com/pako@2.1.0/dist/pako.min.js"></script>
@@ -41,9 +245,27 @@
 <body>
 
 <div id="content">
-  <h1 id="message">Waiting for Players</h1>
-	<p id="keys">Arrow keys = joypad, X = a, Z = b, Enter = start, Ctrl = select</p>
-  <div id="emulator"></div>
+  <div class="canvas-container">
+    <button id="fullscreen-btn">⛶</button>
+    <div id="emulator"></div>
+    <div id="status-overlay"></div>
+  </div>
+</div>
+<p id="keys">Arrow keys = joypad, X = a, Z = b, Enter = start, Ctrl = select</p>
+<div id="virtual-gamepad">
+  <div class="joystick-area" id="joystick">
+    <div class="joystick-dot" id="joystick-dot"></div>
+  </div>
+  <div class="abpad">
+    <div class="abpad-col">
+      <button class="gamepad-btn a" data-key="88">A</button>
+      <button class="gamepad-btn start" data-key="13">Start</button>
+    </div>
+    <div class="abpad-col">
+      <button class="gamepad-btn b" data-key="90">B</button>
+      <button class="gamepad-btn select" data-key="17">Select</button>
+    </div>
+  </div>
 </div>
 
 <script src="jsnes/lib/jquery-1.4.2.min.js" type="text/javascript" charset="utf-8"></script>
@@ -178,22 +400,15 @@ function drawData(data) {
 }
 
 function startPlaying(data) {
-	player = parseInt(data, 10);
+  player = parseInt(data, 10);
 
   if (player == 1) {
     newGame();
-		$("#message").text("You are Player 1");
-  }
-  if (player == 2) {
-    $("#message").text("You are Player 2");
-  }
-
-  if (player == 3) {
-    $("#message").text("You are Player 3");
-  }
-
-  if (player == 4) {
-    $("#message").text("You are Player 4");
+    setStatus("Игрок 1");
+  } else if (player > 1 && player <= 4) {
+    setStatus("Игрок " + player);
+  } else {
+    setStatus("Ожидание других игроков...");
   }
 }
 
@@ -212,7 +427,7 @@ function stopPlaying() {
   }
   clearScreen();
   player = 0;
-  $("#message").text("Waiting for Players");
+  setStatus("Ожидание других игроков...");
 }
 
 function applyRLE_RGB_DiffBuffer(buf) {
@@ -315,6 +530,217 @@ $(document).bind("keyup", function(evt) {
 
 clearScreen();
 
+// === FULLSCREEN BUTTON ===
+$(function() {
+  const fsBtn = document.getElementById('fullscreen-btn');
+  fsBtn.addEventListener('click', function() {
+    const elem = document.documentElement;
+    if (!document.fullscreenElement) {
+      if (elem.requestFullscreen) elem.requestFullscreen();
+      else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+      else if (elem.mozRequestFullScreen) elem.mozRequestFullScreen();
+      else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+      else if (document.msExitFullscreen) document.msExitFullscreen();
+    }
+  });
+});
+
+// === VIRTUAL GAMEPAD ===
+(function() {
+  // Показывать геймпад только на мобильных
+  function isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 900;
+  }
+  function showGamepadIfMobile() {
+    const pad = document.getElementById('virtual-gamepad');
+    if (isMobile()) pad.style.display = 'flex';
+    else pad.style.display = 'none';
+  }
+  window.addEventListener('resize', showGamepadIfMobile);
+  document.addEventListener('DOMContentLoaded', showGamepadIfMobile);
+  showGamepadIfMobile();
+
+  // --- Виртуальный джойстик ---
+  const joystick = document.getElementById('joystick');
+  const dot = document.getElementById('joystick-dot');
+  let activeDir = null;
+  let touchId = null;
+  let center = null;
+  let radius = null;
+  const keyMap = {
+    up: 38,
+    down: 40,
+    left: 37,
+    right: 39
+  };
+  function getDir(dx, dy) {
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    if (Math.abs(dx) < 15 && Math.abs(dy) < 15) return null;
+    if (angle >= -45 && angle < 45) return 'right';
+    if (angle >= 45 && angle < 135) return 'down';
+    if (angle >= 135 || angle < -135) return 'left';
+    if (angle >= -135 && angle < -45) return 'up';
+    return null;
+  }
+  function triggerDir(dir, type) {
+    if (!dir) return;
+    triggerKey(type, keyMap[dir]);
+  }
+  function resetDot() {
+    dot.style.left = '50%';
+    dot.style.top = '50%';
+    dot.style.transform = 'translate(-50%, -50%)';
+  }
+  function moveDot(dx, dy) {
+    dot.style.left = (50 + dx / radius * 40) + '%';
+    dot.style.top = (50 + dy / radius * 40) + '%';
+    dot.style.transform = 'translate(-50%, -50%)';
+  }
+  function handleStart(e) {
+    const rect = joystick.getBoundingClientRect();
+    center = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+    radius = rect.width/2;
+    let t = e.touches ? e.touches[0] : e;
+    touchId = t.identifier !== undefined ? t.identifier : null;
+    handleMove(e);
+  }
+  function handleMove(e) {
+    let t = e.touches ? Array.from(e.touches).find(t => t.identifier === touchId) : e;
+    if (!t) return;
+    const x = t.clientX - center.x;
+    const y = t.clientY - center.y;
+    const dir = getDir(x, y);
+    moveDot(x, y);
+    if (dir !== activeDir) {
+      if (activeDir) triggerDir(activeDir, 'keyup');
+      if (dir) triggerDir(dir, 'keydown');
+      activeDir = dir;
+    }
+  }
+  function handleEnd(e) {
+    if (activeDir) triggerDir(activeDir, 'keyup');
+    activeDir = null;
+    resetDot();
+    touchId = null;
+  }
+  joystick.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    handleStart(e);
+  });
+  joystick.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    handleMove(e);
+  });
+  joystick.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    handleEnd(e);
+  });
+  joystick.addEventListener('touchcancel', function(e) {
+    e.preventDefault();
+    handleEnd(e);
+  });
+  // Для теста мышью
+  let mouseDown = false;
+  joystick.addEventListener('mousedown', function(e) {
+    mouseDown = true;
+    handleStart(e);
+  });
+  window.addEventListener('mousemove', function(e) {
+    if (mouseDown) handleMove(e);
+  });
+  window.addEventListener('mouseup', function(e) {
+    if (mouseDown) {
+      handleEnd(e);
+      mouseDown = false;
+    }
+  });
+  // --- Кнопки A/B/Start/Select ---
+  const btns = document.querySelectorAll('#virtual-gamepad .gamepad-btn');
+  btns.forEach(btn => {
+    let key = parseInt(btn.getAttribute('data-key'), 10);
+    btn.addEventListener('touchstart', function(e) {
+      e.preventDefault();
+      triggerKey('keydown', key);
+    });
+    btn.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      triggerKey('keyup', key);
+    });
+    btn.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      triggerKey('keydown', key);
+    });
+    btn.addEventListener('mouseup', function(e) {
+      e.preventDefault();
+      triggerKey('keyup', key);
+    });
+    btn.addEventListener('mouseleave', function(e) {
+      e.preventDefault();
+      triggerKey('keyup', key);
+    });
+  });
+})();
+
+// === Динамический ресайз canvas с учётом геймпада и safe-area ===
+function resizeCanvas() {
+  const container = document.querySelector('.canvas-container');
+  if (!container) return;
+  const canvas = container.querySelector('canvas');
+  if (!canvas) return;
+  const gamepad = document.getElementById('virtual-gamepad');
+  const gamepadVisible = window.getComputedStyle(gamepad).display !== 'none';
+  const gamepadHeight = gamepadVisible ? gamepad.offsetHeight : 0;
+  // Safe area (iOS)
+  const safeArea = parseInt(getComputedStyle(container).paddingBottom) || 0;
+  window.scrollTo(0, 0); // Попробовать сбросить скролл
+  // Force reflow
+  container.offsetHeight;
+  // Временный сброс размеров canvas
+  canvas.style.width = '1px';
+  canvas.style.height = '1px';
+  const availableHeight = window.innerHeight - gamepadHeight - safeArea;
+  // Пропорция 256:240
+  const maxWidth = window.innerWidth;
+  const maxHeight = availableHeight;
+  let width = maxWidth;
+  let height = width * 240 / 256;
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * 256 / 240;
+  }
+  requestAnimationFrame(() => {
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+  });
+}
+
+function scheduleResizeCanvas() {
+  resizeCanvas();
+  setTimeout(resizeCanvas, 100);
+  setTimeout(resizeCanvas, 400);
+  setTimeout(resizeCanvas, 1000);
+}
+window.addEventListener('resize', scheduleResizeCanvas);
+window.addEventListener('orientationchange', scheduleResizeCanvas);
+
+// === Управление статусом поверх canvas ===
+function setStatus(text) {
+  document.getElementById('status-overlay').innerHTML = text || '';
+}
+
+// Пример использования:
+// setStatus('Ожидание других игроков...');
+// setStatus('Вы — игрок 2');
+// setStatus('');
+
+document.addEventListener('DOMContentLoaded', function() {
+  setStatus('Ожидание других игроков...');
+});
+setStatus("Ожидание других игроков...");
 });
 </script>
 </body>
