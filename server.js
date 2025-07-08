@@ -49,8 +49,16 @@ setInterval(() => {
   console.log(`[Traffic] Received: ${totalBytesReceived} B | Sent: ${totalBytesSent} B`);
 }, 10000);
 
+// Heartbeat (опросник)
+function heartbeat() {
+  this.isAlive = true;
+}
+
 wss.on('connection', (ws) => {
   console.log('connect');
+
+  ws.isAlive = true;
+  ws.on('pong', heartbeat);
 
   room.push(ws);
   if (room.length === maxPLayers) {
@@ -102,6 +110,22 @@ wss.on('connection', (ws) => {
 
     console.log(`[Session ended] Current total traffic: Received ${totalBytesReceived} B, Sent ${totalBytesSent} B`);
   });
+});
+
+// Периодический опросник (heartbeat)
+const interval = setInterval(function ping() {
+  wss.clients.forEach(function each(ws) {
+    if (ws.isAlive === false) {
+      ws.terminate();
+      return;
+    }
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 10000); // каждые 10 секунд
+
+wss.on('close', function close() {
+  clearInterval(interval);
 });
 
 server.listen(port, () => {
