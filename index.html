@@ -744,7 +744,7 @@ $(function() {
   // --- Виртуальный джойстик ---
   const joystick = document.getElementById('joystick');
   const dot = document.getElementById('joystick-dot');
-  let activeDir = null;
+  let activeDirs = new Set();
   let touchId = null;
   let center = null;
   let radius = null;
@@ -754,18 +754,28 @@ $(function() {
     left: 37,
     right: 39
   };
-  function getDir(dx, dy) {
-    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-    if (Math.abs(dx) < 15 && Math.abs(dy) < 15) return null;
-    if (angle >= -45 && angle < 45) return 'right';
-    if (angle >= 45 && angle < 135) return 'down';
-    if (angle >= 135 || angle < -135) return 'left';
-    if (angle >= -135 && angle < -45) return 'up';
-    return null;
+  function getDirs(dx, dy) {
+    const dirs = [];
+    if (Math.abs(dx) < 15 && Math.abs(dy) < 15) return dirs;
+    if (dy < -15) dirs.push('up');
+    if (dy > 15) dirs.push('down');
+    if (dx < -15) dirs.push('left');
+    if (dx > 15) dirs.push('right');
+    return dirs;
   }
-  function triggerDir(dir, type) {
-    if (!dir) return;
-    triggerKey(type, keyMap[dir]);
+  function triggerDirs(newDirs) {
+    for (let dir of activeDirs) {
+      if (!newDirs.includes(dir)) {
+        triggerKey('keyup', keyMap[dir]);
+        activeDirs.delete(dir);
+      }
+    }
+    for (let dir of newDirs) {
+      if (!activeDirs.has(dir)) {
+        triggerKey('keydown', keyMap[dir]);
+        activeDirs.add(dir);
+      }
+    }
   }
   function resetDot() {
     dot.style.left = '50%';
@@ -790,17 +800,15 @@ $(function() {
     if (!t) return;
     const x = t.clientX - center.x;
     const y = t.clientY - center.y;
-    const dir = getDir(x, y);
     moveDot(x, y);
-    if (dir !== activeDir) {
-      if (activeDir) triggerDir(activeDir, 'keyup');
-      if (dir) triggerDir(dir, 'keydown');
-      activeDir = dir;
-    }
+    const dirs = getDirs(x, y);
+    triggerDirs(dirs);
   }
   function handleEnd(e) {
-    if (activeDir) triggerDir(activeDir, 'keyup');
-    activeDir = null;
+    for (let dir of activeDirs) {
+      triggerKey('keyup', keyMap[dir]);
+    }
+    activeDirs.clear();
     resetDot();
     touchId = null;
   }
