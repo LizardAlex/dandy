@@ -81,51 +81,58 @@ function clearScreen() {
 
 function createNes() {
   nes = new JSNES({});
+  var firstFrame = true;
   nes.ui.writeFrame = function (buffer, prevBuffer) {
     var data = imageData.data;
     var pixel, i, j;
-    var rleDiffs = [];
+    var rleBlocks = [];
     var runStart = -1;
     var runColors = [];
     for (i = 0; i < 256 * 240; i++) {
       pixel = buffer[i];
       j = i * 4;
-      // Всегда обновляем картинку и prevBuffer
       data[j] = pixel & 0xFF;
       data[j+1] = (pixel >> 8) & 0xFF;
       data[j+2] = (pixel >> 16) & 0xFF;
       data[j+3] = 0xFF;
-      // Формируем RLE diff только для изменённых пикселей
-      if (pixel != prevBuffer[i]) {
-        if (runStart === -1) {
-          runStart = i;
-        }
+      if (firstFrame || pixel != prevBuffer[i]) {
+        if (runStart === -1) runStart = i;
         runColors.push(pixel);
       } else if (runStart !== -1) {
-        // Конец серии изменений
-        rleDiffs.push(runStart, runColors.length);
-        for (var c = 0; c < runColors.length; c++) {
-          rleDiffs.push(runColors[c]);
-        }
+        rleBlocks.push([runStart, runColors.slice()]);
         runStart = -1;
         runColors = [];
       }
-      prevBuffer[i] = pixel; // всегда обновлять!
+      prevBuffer[i] = pixel;
     }
-    // Если серия изменений до конца кадра
     if (runStart !== -1) {
-      rleDiffs.push(runStart, runColors.length);
-      for (var c = 0; c < runColors.length; c++) {
-        rleDiffs.push(runColors[c]);
-      }
+      rleBlocks.push([runStart, runColors.slice()]);
     }
     context.putImageData(imageData, 0, 0);
-    // Отправляем RLE+zlib diff через WebSocket (только если Player 1)
-    if (player === 1 && rleDiffs.length > 0) {
-      var diffBuf = new Uint32Array(rleDiffs);
-      var compressed = pako.deflate(new Uint8Array(diffBuf.buffer));
+    var totalBytes = 0;
+    for (var b = 0; b < rleBlocks.length; b++) {
+      totalBytes += 8 + rleBlocks[b][1].length * 3;
+    }
+    var buf = new ArrayBuffer(totalBytes);
+    var view = new DataView(buf);
+    var offset = 0;
+    for (var b = 0; b < rleBlocks.length; b++) {
+      var start = rleBlocks[b][0];
+      var colors = rleBlocks[b][1];
+      view.setUint32(offset, start, true); offset += 4;
+      view.setUint32(offset, colors.length, true); offset += 4;
+      for (var c = 0; c < colors.length; c++) {
+        var p = colors[c];
+        view.setUint8(offset++, p & 0xFF);
+        view.setUint8(offset++, (p >> 8) & 0xFF);
+        view.setUint8(offset++, (p >> 16) & 0xFF);
+      }
+    }
+    if (player === 1 && totalBytes > 0) {
+      var compressed = pako.deflate(new Uint8Array(buf));
       ws.send(compressed.buffer);
     }
+    firstFrame = false;
   };
 }
 
@@ -208,20 +215,24 @@ function stopPlaying() {
   $("#message").text("Waiting for Players");
 }
 
-function applyRLEDiffBuffer(buf) {
-  var diff32 = new Uint32Array(buf);
+function applyRLE_RGB_DiffBuffer(buf) {
+  var u8 = new Uint8Array(buf);
+  var view = new DataView(buf);
   var data = imageData.data;
   var idx = 0;
-  while (idx < diff32.length) {
-    var start = diff32[idx++];
-    var len = diff32[idx++];
+  while (idx + 8 <= u8.length) {
+    var start = view.getUint32(idx, true); idx += 4;
+    var len = view.getUint32(idx, true); idx += 4;
+    if (len === 0 || idx + len*3 > u8.length) break;
     for (var k = 0; k < len; k++) {
-      var pixel = diff32[idx++];
+      var r = u8[idx++];
+      var g = u8[idx++];
+      var b = u8[idx++];
       var i = start + k;
       var j = i * 4;
-      data[j] = pixel & 0xFF;
-      data[j + 1] = (pixel >> 8) & 0xFF;
-      data[j + 2] = (pixel >> 16) & 0xFF;
+      data[j] = r;
+      data[j + 1] = g;
+      data[j + 2] = b;
       data[j + 3] = 0xFF;
     }
   }
@@ -232,7 +243,7 @@ ws.onmessage = function (msg) {
   if (msg.data instanceof Blob) {
     msg.data.arrayBuffer().then(function(buf) {
       var decompressed = pako.inflate(new Uint8Array(buf)).buffer;
-      applyRLEDiffBuffer(decompressed);
+      applyRLE_RGB_DiffBuffer(decompressed);
     });
   } else {
     var parts = msg.data.split(" ");
