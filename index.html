@@ -435,23 +435,57 @@ function createNes() {
       rleBlocks.push([runStart, runColors.slice()]);
     }
     context.putImageData(imageData, 0, 0);
-    var totalBytes = 0;
-    for (var b = 0; b < rleBlocks.length; b++) {
-      totalBytes += 8 + rleBlocks[b][1].length * 3;
+    // === Квантование цвета ===
+    // Собираем палитру (до 256 цветов)
+    let palette = [];
+    let colorToIndex = {};
+    for (let b = 0; b < rleBlocks.length; b++) {
+      for (let c = 0; c < rleBlocks[b][1].length; c++) {
+        let color = rleBlocks[b][1][c];
+        if (colorToIndex[color] === undefined) {
+          if (palette.length < 256) {
+            colorToIndex[color] = palette.length;
+            palette.push(color);
+          } else {
+            // Если больше 256 цветов, ищем ближайший (по простому RGB)
+            let minDist = 1e9, minIdx = 0;
+            let r1 = color & 0xFF, g1 = (color >> 8) & 0xFF, b1 = (color >> 16) & 0xFF;
+            for (let pi = 0; pi < palette.length; pi++) {
+              let p = palette[pi];
+              let r2 = p & 0xFF, g2 = (p >> 8) & 0xFF, b2 = (p >> 16) & 0xFF;
+              let dist = (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2;
+              if (dist < minDist) { minDist = dist; minIdx = pi; }
+            }
+            colorToIndex[color] = minIdx;
+          }
+        }
+      }
     }
-    var buf = new ArrayBuffer(totalBytes);
-    var view = new DataView(buf);
-    var offset = 0;
-    for (var b = 0; b < rleBlocks.length; b++) {
-      var start = rleBlocks[b][0];
-      var colors = rleBlocks[b][1];
+    // Заменяем цвета на индексы палитры
+    let rleBlocksIdx = rleBlocks.map(([start, colors]) => [start, colors.map(c => colorToIndex[c])]);
+    // Считаем размер: палитра (768 байт) + diff-блоки
+    let totalBytes = 768; // 256*3
+    for (let b = 0; b < rleBlocksIdx.length; b++) {
+      totalBytes += 8 + rleBlocksIdx[b][1].length; // 4+4+N индексов
+    }
+    let buf = new ArrayBuffer(totalBytes);
+    let view = new DataView(buf);
+    let offset = 0;
+    // Пишем палитру (R,G,B по 256)
+    for (let pi = 0; pi < 256; pi++) {
+      let color = palette[pi] || 0;
+      view.setUint8(offset++, color & 0xFF);
+      view.setUint8(offset++, (color >> 8) & 0xFF);
+      view.setUint8(offset++, (color >> 16) & 0xFF);
+    }
+    // Пишем diff-блоки (start, len, индексы)
+    for (let b = 0; b < rleBlocksIdx.length; b++) {
+      let start = rleBlocksIdx[b][0];
+      let idxs = rleBlocksIdx[b][1];
       view.setUint32(offset, start, true); offset += 4;
-      view.setUint32(offset, colors.length, true); offset += 4;
-      for (var c = 0; c < colors.length; c++) {
-        var p = colors[c];
-        view.setUint8(offset++, p & 0xFF);
-        view.setUint8(offset++, (p >> 8) & 0xFF);
-        view.setUint8(offset++, (p >> 16) & 0xFF);
+      view.setUint32(offset, idxs.length, true); offset += 4;
+      for (let c = 0; c < idxs.length; c++) {
+        view.setUint8(offset++, idxs[c]);
       }
     }
     if (player === 1 && totalBytes > 0) {
@@ -538,6 +572,35 @@ function applyRLE_RGB_DiffBuffer(buf) {
   var u8 = new Uint8Array(buf);
   var view = new DataView(buf);
   var data = imageData.data;
+  var idx = 0;
+  // === Декодирование с палитрой ===
+  if (u8.length >= 768) {
+    // Палитра есть
+    let palette = [];
+    for (let pi = 0; pi < 256; pi++) {
+      let r = u8[idx++], g = u8[idx++], b = u8[idx++];
+      palette.push([r, g, b]);
+    }
+    while (idx + 8 <= u8.length) {
+      var start = view.getUint32(idx, true); idx += 4;
+      var len = view.getUint32(idx, true); idx += 4;
+      if (len === 0 || idx + len > u8.length) break;
+      for (var k = 0; k < len; k++) {
+        var palIdx = u8[idx++];
+        var i = start + k;
+        var j = i * 4;
+        var rgb = palette[palIdx] || [0,0,0];
+        data[j] = rgb[0];
+        data[j + 1] = rgb[1];
+        data[j + 2] = rgb[2];
+        data[j + 3] = 0xFF;
+      }
+    }
+    context.putImageData(imageData, 0, 0);
+    return;
+  }
+  // Старый режим (RGB)
+  var view = new DataView(buf);
   var idx = 0;
   while (idx + 8 <= u8.length) {
     var start = view.getUint32(idx, true); idx += 4;
