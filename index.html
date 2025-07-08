@@ -293,6 +293,79 @@ $("#emulator").append(screen);
 var nes = null;
 var player = 0;
 
+// --- Web Audio API globals ---
+let audioCtx = null;
+let gainNode = null;
+let audioBufferQueue = [];
+let sampleRate = 44100;
+
+function downsampleBuffer(inputBuffer, inputSampleRate, outputSampleRate) {
+  if (outputSampleRate === inputSampleRate) return inputBuffer;
+  const sampleRateRatio = inputSampleRate / outputSampleRate;
+  const newLength = Math.floor(inputBuffer.length / sampleRateRatio);
+  const result = new Int16Array(newLength);
+  for (let i = 0; i < newLength; i++) {
+    result[i] = inputBuffer[Math.floor(i * sampleRateRatio)];
+  }
+  return result;
+}
+
+function downsampleAndMono(stereoBuffer, inputSampleRate, outputSampleRate) {
+  if (outputSampleRate === inputSampleRate) return stereoBuffer;
+  const sampleRateRatio = inputSampleRate / outputSampleRate;
+  const outLength = Math.floor(stereoBuffer.length / 2 / sampleRateRatio);
+  const mono = new Int16Array(outLength);
+  for (let i = 0, j = 0; j < outLength; j++) {
+    const left = stereoBuffer[Math.floor(i)];
+    const right = stereoBuffer[Math.floor(i) + 1];
+    mono[j] = ((left + right) / 2) | 0;
+    i += 2 * sampleRateRatio;
+  }
+  return mono;
+}
+
+function lowPassFilter(buffer, windowSize = 7) {
+  const out = new Int16Array(buffer.length);
+  for (let i = 0; i < buffer.length; i++) {
+    let sum = 0, count = 0;
+    for (let j = -Math.floor(windowSize/2); j <= Math.floor(windowSize/2); j++) {
+      const idx = i + j;
+      if (idx >= 0 && idx < buffer.length) {
+        sum += buffer[idx];
+        count++;
+      }
+    }
+    out[i] = sum / count;
+  }
+  return out;
+}
+
+function playNextBuffer() {
+  if (!audioBufferQueue.length || !audioCtx) return;
+  const buf = audioBufferQueue.shift();
+  // Моно, sampleRate = 22050
+  const buffer = audioCtx.createBuffer(1, buf.length, 22050);
+  const ch = buffer.getChannelData(0);
+  for (let i = 0; i < buf.length; i++) {
+    ch[i] = buf[i] / 32768;
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  src.connect(gainNode || audioCtx.destination);
+  src.onended = playNextBuffer;
+  src.start();
+}
+
+function ensureAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    sampleRate = audioCtx.sampleRate;
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = 0.3; // тише
+    gainNode.connect(audioCtx.destination);
+  }
+}
+
 function clearScreen() {
   context.fillStyle = "black";
   context.fillRect(0, 0, 256, 240);
@@ -302,8 +375,39 @@ function clearScreen() {
 }
 
 function createNes() {
-  nes = new JSNES({});
+  nes = new JSNES({
+    emulateSound: true
+  });
   var firstFrame = true;
+
+  nes.ui.writeAudio = function (samples) {
+    if (player === 1) {
+      ensureAudioContext();
+      audioBufferQueue.push(samples.slice());
+      if (audioBufferQueue.length === 1) {
+        playNextBuffer();
+      }
+      // Отправляем аудио зрителям с префиксом 'AUD0', пониженной частотой и в моно
+      if (ws.readyState === WebSocket.OPEN) {
+        const originalSampleRate = 44100;
+        const targetSampleRate = 22050;
+        const int16 = new Int16Array(samples.length);
+        for (let i = 0; i < samples.length; ++i) {
+          int16[i] = Math.max(-32768, Math.min(32767, samples[i]));
+        }
+        // Применяем low-pass фильтр перед downsampleAndMono
+        const filtered = lowPassFilter(int16, 7);
+        const downsampledMono = downsampleAndMono(filtered, originalSampleRate, targetSampleRate);
+        // Префикс 'AUD0'
+        const prefix = new Uint8Array([65, 85, 68, 48]); // 'A','U','D','0'
+        const audioBuf = new Uint8Array(prefix.length + downsampledMono.byteLength);
+        audioBuf.set(prefix, 0);
+        audioBuf.set(new Uint8Array(downsampledMono.buffer), prefix.length);
+        ws.send(audioBuf.buffer);
+      }
+    }
+  };
+
   nes.ui.writeFrame = function (buffer, prevBuffer) {
     var data = imageData.data;
     var pixel, i, j;
@@ -454,25 +558,36 @@ function applyRLE_RGB_DiffBuffer(buf) {
   context.putImageData(imageData, 0, 0);
 }
 
+// Для зрителей: приём аудио
 ws.onmessage = function (msg) {
-  if (msg.data instanceof Blob) {
+  if (msg.data instanceof Blob && player !== 1) {
     msg.data.arrayBuffer().then(function(buf) {
-      var decompressed = pako.inflate(new Uint8Array(buf)).buffer;
+      const u8 = new Uint8Array(buf);
+      // Проверяем префикс 'AUD0'
+      if (u8.length > 4 && u8[0] === 65 && u8[1] === 85 && u8[2] === 68 && u8[3] === 48) {
+        // Это аудио
+        const int16 = new Int16Array(buf, 4);
+        const int32 = new Int32Array(int16.length);
+        for (let i = 0; i < int16.length; ++i) int32[i] = int16[i];
+        ensureAudioContext();
+        audioBufferQueue.push(int32);
+        if (audioBufferQueue.length === 1) playNextBuffer();
+        return;
+      }
+      // иначе — это diff
+      var decompressed = pako.inflate(u8).buffer;
       applyRLE_RGB_DiffBuffer(decompressed);
     });
-  } else {
+  } else if (typeof msg.data === 'string') {
     var parts = msg.data.split(" ");
     var cmd = parts[0];
     var data = parts[1];
-
     if (cmd === "join") {
       startPlaying(data);
     }
-
     if (cmd === "part") {
       stopPlaying();
     }
-
     if (cmd === "keyup" || cmd === "keydown") {
       triggerKey(cmd, parseInt(data, 10));
     }
