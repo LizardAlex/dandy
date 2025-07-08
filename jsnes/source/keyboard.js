@@ -40,34 +40,34 @@ JSNES.Keyboard.prototype = {
             case 39: this.state1[this.keys.KEY_RIGHT] = value; break;  // Right
 
             // Игрок 2 (NumPad)
-            case 103: this.state2[this.keys.KEY_A] = value; break;     // Num-7
-            case 105: this.state2[this.keys.KEY_B] = value; break;     // Num-9
-            case 99:  this.state2[this.keys.KEY_SELECT] = value; break; // Num-3
-            case 97:  this.state2[this.keys.KEY_START] = value; break;  // Num-1
-            case 104: this.state2[this.keys.KEY_UP] = value; break;    // Num-8
-            case 98:  this.state2[this.keys.KEY_DOWN] = value; break;   // Num-2
-            case 100: this.state2[this.keys.KEY_LEFT] = value; break;  // Num-4
-            case 102: this.state2[this.keys.KEY_RIGHT] = value; break; // Num-6
+            case 2103: this.state2[this.keys.KEY_A] = value; break;     // Num-7
+            case 2105: this.state2[this.keys.KEY_B] = value; break;     // Num-9
+            case 299:  this.state2[this.keys.KEY_SELECT] = value; break; // Num-3
+            case 297:  this.state2[this.keys.KEY_START] = value; break;  // Num-1
+            case 2104: this.state2[this.keys.KEY_UP] = value; break;    // Num-8
+            case 298:  this.state2[this.keys.KEY_DOWN] = value; break;   // Num-2
+            case 2100: this.state2[this.keys.KEY_LEFT] = value; break;  // Num-4
+            case 2102: this.state2[this.keys.KEY_RIGHT] = value; break; // Num-6
 
             // Игрок 3 — например, WASD + Q,E + Shift + Ctrl
-            case 87: this.state3[this.keys.KEY_UP] = value; break;     // W
-            case 83: this.state3[this.keys.KEY_DOWN] = value; break;   // S
-            case 65: this.state3[this.keys.KEY_LEFT] = value; break;   // A
-            case 68: this.state3[this.keys.KEY_RIGHT] = value; break;  // D
-            case 81: this.state3[this.keys.KEY_SELECT] = value; break; // Q
-            case 69: this.state3[this.keys.KEY_START] = value; break;  // E
-            case 16: this.state3[this.keys.KEY_A] = value; break;      // Shift
-            case 18: this.state3[this.keys.KEY_B] = value; break;      // Ctrl
+            case 387: this.state3[this.keys.KEY_UP] = value; break;     // W
+            case 383: this.state3[this.keys.KEY_DOWN] = value; break;   // S
+            case 365: this.state3[this.keys.KEY_LEFT] = value; break;   // A
+            case 368: this.state3[this.keys.KEY_RIGHT] = value; break;  // D
+            case 381: this.state3[this.keys.KEY_SELECT] = value; break; // Q
+            case 369: this.state3[this.keys.KEY_START] = value; break;  // E
+            case 316: this.state3[this.keys.KEY_A] = value; break;      // Shift
+            case 318: this.state3[this.keys.KEY_B] = value; break;      // Ctrl
 
             // Игрок 4 — например, IJKL + U,O + RightShift + RightCtrl
-            case 73: this.state4[this.keys.KEY_UP] = value; break;     // I
-            case 75: this.state4[this.keys.KEY_DOWN] = value; break;   // K
-            case 74: this.state4[this.keys.KEY_LEFT] = value; break;   // J
-            case 76: this.state4[this.keys.KEY_RIGHT] = value; break;  // L
-            case 85: this.state4[this.keys.KEY_SELECT] = value; break; // U
-            case 79: this.state4[this.keys.KEY_START] = value; break;  // O
-            case 16: this.state4[this.keys.KEY_A] = value; break;      // Right Shift (учти, что код может совпадать с левым Shift)
-            case 19: this.state4[this.keys.KEY_B] = value; break;      // Right Ctrl (тоже надо отдельно обрабатывать)
+            case 473: this.state4[this.keys.KEY_UP] = value; break;     // I
+            case 475: this.state4[this.keys.KEY_DOWN] = value; break;   // K
+            case 474: this.state4[this.keys.KEY_LEFT] = value; break;   // J
+            case 476: this.state4[this.keys.KEY_RIGHT] = value; break;  // L
+            case 485: this.state4[this.keys.KEY_SELECT] = value; break; // U
+            case 479: this.state4[this.keys.KEY_START] = value; break;  // O
+            case 416: this.state4[this.keys.KEY_A] = value; break;      // Right Shift (учти, что код может совпадать с левым Shift)
+            case 419: this.state4[this.keys.KEY_B] = value; break;      // Right Ctrl (тоже надо отдельно обрабатывать)
 
             default: return true;
         }
