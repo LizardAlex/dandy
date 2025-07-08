@@ -38,7 +38,7 @@ const pairs = new Map(); // ws -> partner
 const lock = new Set();  // хранит ws без пары
 
 // Статистика
-const maxPLayers = 4;
+const maxPLayers = process.argv[4] || 4;
 const room = [];
 let totalBytesReceived = 0;
 let totalBytesSent = 0;
