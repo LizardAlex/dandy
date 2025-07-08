@@ -84,21 +84,45 @@ function createNes() {
   nes.ui.writeFrame = function (buffer, prevBuffer) {
     var data = imageData.data;
     var pixel, i, j;
-    var diffs = [];
-    for (i=0; i<256*240; i++) {
-        pixel = buffer[i];
-        if (pixel != prevBuffer[i]) {
-            j = i*4;
-            data[j] = pixel & 0xFF;
-            data[j+1] = (pixel >> 8) & 0xFF;
-            data[j+2] = (pixel >> 16) & 0xFF;
-            prevBuffer[i] = pixel;
-            diffs.push(i, pixel);
+    var rleDiffs = [];
+    var runStart = -1;
+    var runColors = [];
+    for (i = 0; i < 256 * 240; i++) {
+      pixel = buffer[i];
+      j = i * 4;
+      // Всегда обновляем картинку и prevBuffer
+      data[j] = pixel & 0xFF;
+      data[j+1] = (pixel >> 8) & 0xFF;
+      data[j+2] = (pixel >> 16) & 0xFF;
+      data[j+3] = 0xFF;
+      // Формируем RLE diff только для изменённых пикселей
+      if (pixel != prevBuffer[i]) {
+        if (runStart === -1) {
+          runStart = i;
         }
+        runColors.push(pixel);
+      } else if (runStart !== -1) {
+        // Конец серии изменений
+        rleDiffs.push(runStart, runColors.length);
+        for (var c = 0; c < runColors.length; c++) {
+          rleDiffs.push(runColors[c]);
+        }
+        runStart = -1;
+        runColors = [];
+      }
+      prevBuffer[i] = pixel; // всегда обновлять!
+    }
+    // Если серия изменений до конца кадра
+    if (runStart !== -1) {
+      rleDiffs.push(runStart, runColors.length);
+      for (var c = 0; c < runColors.length; c++) {
+        rleDiffs.push(runColors[c]);
+      }
     }
     context.putImageData(imageData, 0, 0);
-    if (player === 1 && diffs.length > 0) {
-      var diffBuf = new Uint32Array(diffs);
+    // Отправляем RLE+zlib diff через WebSocket (только если Player 1)
+    if (player === 1 && rleDiffs.length > 0) {
+      var diffBuf = new Uint32Array(rleDiffs);
       var compressed = pako.deflate(new Uint8Array(diffBuf.buffer));
       ws.send(compressed.buffer);
     }
@@ -184,17 +208,22 @@ function stopPlaying() {
   $("#message").text("Waiting for Players");
 }
 
-function applyDiffBuffer(buf) {
-  var diffs = new Uint32Array(buf);
+function applyRLEDiffBuffer(buf) {
+  var diff32 = new Uint32Array(buf);
   var data = imageData.data;
-  for (var k = 0; k < diffs.length; k += 2) {
-    var i = diffs[k];
-    var pixel = diffs[k+1];
-    var j = i*4;
-    data[j] = pixel & 0xFF;
-    data[j+1] = (pixel >> 8) & 0xFF;
-    data[j+2] = (pixel >> 16) & 0xFF;
-    data[j+3] = 0xFF;
+  var idx = 0;
+  while (idx < diff32.length) {
+    var start = diff32[idx++];
+    var len = diff32[idx++];
+    for (var k = 0; k < len; k++) {
+      var pixel = diff32[idx++];
+      var i = start + k;
+      var j = i * 4;
+      data[j] = pixel & 0xFF;
+      data[j + 1] = (pixel >> 8) & 0xFF;
+      data[j + 2] = (pixel >> 16) & 0xFF;
+      data[j + 3] = 0xFF;
+    }
   }
   context.putImageData(imageData, 0, 0);
 }
@@ -203,7 +232,7 @@ ws.onmessage = function (msg) {
   if (msg.data instanceof Blob) {
     msg.data.arrayBuffer().then(function(buf) {
       var decompressed = pako.inflate(new Uint8Array(buf)).buffer;
-      applyDiffBuffer(decompressed);
+      applyRLEDiffBuffer(decompressed);
     });
   } else {
     var parts = msg.data.split(" ");
