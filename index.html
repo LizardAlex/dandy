@@ -35,6 +35,7 @@
       padding-bottom: 15px;
     }
   </style>
+  <script src="https://unpkg.com/pako@2.1.0/dist/pako.min.js"></script>
 </head>
 
 <body>
@@ -83,6 +84,7 @@ function createNes() {
   nes.ui.writeFrame = function (buffer, prevBuffer) {
     var data = imageData.data;
     var pixel, i, j;
+    var diffs = [];
     for (i=0; i<256*240; i++) {
         pixel = buffer[i];
         if (pixel != prevBuffer[i]) {
@@ -91,10 +93,15 @@ function createNes() {
             data[j+1] = (pixel >> 8) & 0xFF;
             data[j+2] = (pixel >> 16) & 0xFF;
             prevBuffer[i] = pixel;
+            diffs.push(i, pixel);
         }
     }
     context.putImageData(imageData, 0, 0);
-    sendScreen();
+    if (player === 1 && diffs.length > 0) {
+      var diffBuf = new Uint32Array(diffs);
+      var compressed = pako.deflate(new Uint8Array(diffBuf.buffer));
+      ws.send(compressed.buffer);
+    }
   };
 }
 
@@ -177,9 +184,27 @@ function stopPlaying() {
   $("#message").text("Waiting for Players");
 }
 
+function applyDiffBuffer(buf) {
+  var diffs = new Uint32Array(buf);
+  var data = imageData.data;
+  for (var k = 0; k < diffs.length; k += 2) {
+    var i = diffs[k];
+    var pixel = diffs[k+1];
+    var j = i*4;
+    data[j] = pixel & 0xFF;
+    data[j+1] = (pixel >> 8) & 0xFF;
+    data[j+2] = (pixel >> 16) & 0xFF;
+    data[j+3] = 0xFF;
+  }
+  context.putImageData(imageData, 0, 0);
+}
+
 ws.onmessage = function (msg) {
   if (msg.data instanceof Blob) {
-    drawData(URL.createObjectURL(msg.data));
+    msg.data.arrayBuffer().then(function(buf) {
+      var decompressed = pako.inflate(new Uint8Array(buf)).buffer;
+      applyDiffBuffer(decompressed);
+    });
   } else {
     var parts = msg.data.split(" ");
     var cmd = parts[0];
