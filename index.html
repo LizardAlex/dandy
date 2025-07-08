@@ -756,11 +756,28 @@ $(function() {
   };
   function getDirs(dx, dy) {
     const dirs = [];
-    if (Math.abs(dx) < 15 && Math.abs(dy) < 15) return dirs;
-    if (dy < -15) dirs.push('up');
-    if (dy > 15) dirs.push('down');
-    if (dx < -15) dirs.push('left');
-    if (dx > 15) dirs.push('right');
+    const threshold = 15;
+    const diagonalThreshold = 0.5; // чем больше — тем уже зона диагоналей
+
+    if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return dirs;
+
+    // Горизонтальное направление
+    if (Math.abs(dx) > Math.abs(dy) * (1 + diagonalThreshold)) {
+      if (dx < -threshold) dirs.push('left');
+      if (dx > threshold) dirs.push('right');
+    }
+    // Вертикальное направление
+    else if (Math.abs(dy) > Math.abs(dx) * (1 + diagonalThreshold)) {
+      if (dy < -threshold) dirs.push('up');
+      if (dy > threshold) dirs.push('down');
+    }
+    // Диагонали
+    else {
+      if (dy < -threshold) dirs.push('up');
+      if (dy > threshold) dirs.push('down');
+      if (dx < -threshold) dirs.push('left');
+      if (dx > threshold) dirs.push('right');
+    }
     return dirs;
   }
   function triggerDirs(newDirs) {
