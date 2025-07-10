@@ -999,17 +999,19 @@ JSNES.PPU.prototype = {
                 
                 if (scan>=0) {
                 
-                    // Fetch tile & attrib data:
-                    if (this.validTileData) {
-                        // Get data from array:
+                    // Fetch tile & attrib data (safe for undefined):
+                    if (this.validTileData && scantile[tile] && scantile[tile].pix) {
                         t = scantile[tile];
                         tpix = t.pix;
                         att = attrib[tile];
-                    }else {
-                        // Fetch data:
-                        t = ptTile[baseTile+nameTable[this.curNt].getTileIndex(this.cntHT,this.cntVT)];
+                    } else {
+                        let tileIdx = baseTile + nameTable[this.curNt].getTileIndex(this.cntHT, this.cntVT);
+                        t = ptTile[tileIdx];
+                        if (!t || !t.pix) {
+                            t = new JSNES.PPU.Tile();
+                        }
                         tpix = t.pix;
-                        att = nameTable[this.curNt].getAttrib(this.cntHT,this.cntVT);
+                        att = nameTable[this.curNt].getAttrib(this.cntHT, this.cntVT);
                         scantile[tile] = t;
                         attrib[tile] = att;
                     }
